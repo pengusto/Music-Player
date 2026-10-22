@@ -1,0 +1,1 @@
+Synthetic sine tones with solid red/blue covers, created locally for regression testing. No third-party music, artwork or personal data. MP3 files share the same artist and album tags; Opus files contain METADATA_BLOCK_PICTURE. Safe to redistribute with these tests.

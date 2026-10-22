@@ -183,13 +183,44 @@ fun Context.getTrackCoverArt(track: Track?, callback: (coverArt: Any?) -> Unit) 
             return@ensureBackgroundThread
         }
 
-        val coverArt = track.coverArt.ifEmpty {
+        val coverArt = loadEmbeddedTrackCover(track) ?: track.coverArt.ifEmpty {
             loadTrackCoverArt(track)
         }
 
         Handler(Looper.getMainLooper()).post {
             callback(coverArt)
         }
+    }
+}
+
+/** Prefer embedded bytes from this file, never an album thumbnail from MediaStore. */
+@Suppress("MagicNumber")
+internal fun Context.loadEmbeddedTrackCover(track: Track): Bitmap? {
+    val path = track.path
+    if (path.isEmpty() || !File(path).isFile) return null
+    val retriever = android.media.MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(path)
+        val embedded = retriever.embeddedPicture
+        val picture = embedded ?: (if (path.endsWith(".opus", ignoreCase = true)) {
+            org.fossify.musicplayer.helpers.OpusPicture.read(File(path))
+        } else null) ?: return null
+        val size = resources.getCoverArtHeight().coerceIn(1, 1024)
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(picture, 0, picture.size, bounds)
+        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 }
+        while (bounds.outWidth / options.inSampleSize > size * 2 ||
+            bounds.outHeight / options.inSampleSize > size * 2
+        ) {
+            options.inSampleSize *= 2
+        }
+        android.graphics.BitmapFactory.decodeByteArray(picture, 0, picture.size, options)
+    } catch (ignored: OutOfMemoryError) {
+        null
+    } catch (ignored: Exception) {
+        null
+    } finally {
+        try { retriever.release() } catch (ignored: Exception) { }
     }
 }
 
